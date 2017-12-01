@@ -1,4 +1,4 @@
-# 🚫💩 lint-staged [![Build Status](https://travis-ci.org/okonet/lint-staged.svg?branch=master)](https://travis-ci.org/okonet/lint-staged) [![AppVeyor branch](https://img.shields.io/appveyor/ci/okonet/lint-staged/master.svg)](https://ci.appveyor.com/project/okonet/lint-staged) [![npm version](https://badge.fury.io/js/lint-staged.svg)](https://badge.fury.io/js/lint-staged) [![Codecov](https://codecov.io/gh/okonet/lint-staged/branch/master/graph/badge.svg)](https://codecov.io/gh/okonet/lint-staged)
+# 🚫💩 lint-staged [![Build Status for Linux](https://travis-ci.org/okonet/lint-staged.svg?branch=master)](https://travis-ci.org/okonet/lint-staged)  [![Build Status for Windows](https://ci.appveyor.com/api/projects/status/github/okonet/lint-staged?branch=master&svg=true)](https://ci.appveyor.com/project/okonet/lint-staged) [![npm version](https://badge.fury.io/js/lint-staged.svg)](https://badge.fury.io/js/lint-staged) [![Codecov](https://codecov.io/gh/okonet/lint-staged/branch/master/graph/badge.svg)](https://codecov.io/gh/okonet/lint-staged)
 
 Run linters against staged git files and don't let :poop: slip into your code base!
 
@@ -50,6 +50,28 @@ See [examples](#examples) and [configuration](#configuration) below.
 >
 > To mitigate this rename your `commit` npm script to something non git hook namespace like, for example `{ cz: git-cz }`
 
+## Command line flags
+
+```
+$ ./node_modules/.bin/lint-staged --help
+
+  Usage: lint-staged [options]
+
+
+  Options:
+
+    -V, --version        output the version number
+    -c, --config [path]  Path to configuration file
+    -d, --debug          Enable debug mode
+    -h, --help           output usage information
+```
+
+* **`--config [path]`**: This can be used to manually specify the `lint-staged` config file location. However, if the specified file cannot be found, it will error out instead of performing the usual search.
+* **`--debug`**: Enabling the debug mode does the following:
+  - `lint-staged` uses the [debug](https://github.com/visionmedia/debug) module internally to log information about staged files, commands being executed, location of binaries etc. Debug logs, which are automatically enabled by passing the flag, can also be enabled by setting the environment variable `$DEBUG` to `lint-staged*`.
+  - Use the [`verbose` renderer](https://github.com/SamVerschueren/listr-verbose-renderer) for `listr`.
+  - Do not pass `--silent` to npm scripts.
+
 ## Configuration
 
 Starting with v3.1 you can now use different ways of configuring it:
@@ -57,6 +79,7 @@ Starting with v3.1 you can now use different ways of configuring it:
 * `lint-staged` object in your `package.json`
 * `.lintstagedrc` file in JSON or YML format
 * `lint-staged.config.js` file in JS format
+* Pass a configuration file using the `--config` or `-c` flag
 
 See [cosmiconfig](https://github.com/davidtheclark/cosmiconfig) for more details on what formats are supported.
 
@@ -98,11 +121,9 @@ To set options and keep lint-staged extensible, advanced format can be used. Thi
 ## Options
 
 * `linters` — `Object` — keys (`String`) are glob patterns, values (`Array<String> | String`) are commands to execute.
-* `gitDir` — Sets the relative path to the `.git` root. Useful when your `package.json` is located in a subdirectory. See [working from a subdirectory](#working-from-a-subdirectory)
 * `concurrent` — *true* — runs linters for each glob pattern simultaneously. If you don’t want this, you can set `concurrent: false`
 * `chunkSize` — Max allowed chunk size based on number of files for glob pattern. This is important on windows based systems to avoid command length limitations. See [#147](https://github.com/okonet/lint-staged/issues/147)
 * `subTaskConcurrency` — `1` — Controls concurrency for processing chunks generated for each linter. Execution is **not** concurrent by default(see [#225](https://github.com/okonet/lint-staged/issues/225))
-* `verbose` — *false* — runs lint-staged in verbose mode. When `true` it will use https://github.com/SamVerschueren/listr-verbose-renderer.
 * `globOptions` — `{ matchBase: true, dot: true }` — [minimatch options](https://github.com/isaacs/minimatch#options) to customize how glob patterns match files.
 
 ## Filtering files
@@ -140,6 +161,15 @@ Pass arguments to your commands separated by space as you would do in the shell.
 
 Starting from [v2.0.0](https://github.com/okonet/lint-staged/releases/tag/2.0.0) sequences of commands are supported. Pass an array of commands instead of a single one and they will run sequentially. This is useful for running autoformatting tools like `eslint --fix` or `stylefmt` but can be used for any arbitrary sequences.
 
+## How to use `lint-staged` in a multi package monorepo?
+
+Starting with v5.0, `lint-staged` automatically resolves the git root **without any** additional configuration. You configure `lint-staged` as you normally would if your project root and git root were the same directory.
+
+If you wish to use `lint-staged` in a multi package monorepo, it is recommended to install [`husky`](https://github.com/typicode/husky) in the root package.json.
+[`lerna`](https://github.com/lerna/lerna) can be used to execute the `precommit` script in all sub-packages.
+
+Example repo: [sudo-suhas/lint-staged-multi-pkg](https://github.com/sudo-suhas/lint-staged-multi-pkg).
+
 ## Reformatting the code
 
 Tools like ESLint/TSLint or stylefmt can reformat your code according to an appropriate config  by running `eslint --fix`/`tslint --fix`. After the code is reformatted, we want it to be added to the same commit. This can be done using following config:
@@ -151,19 +181,6 @@ Tools like ESLint/TSLint or stylefmt can reformat your code according to an appr
 ```
 
 ~~Starting from v3.1, lint-staged will stash you remaining changes (not added to the index) and restore them from stash afterwards. This allows you to create partial commits with hunks using `git add --patch`.~~ This is still [not resolved](https://github.com/okonet/lint-staged/issues/62)
-
-## Working from a subdirectory
-
-If your `package.json` is located in a subdirectory of the git root directory, you can use `gitDir` relative path to point there in order to make lint-staged work.
-
-```diff json
-{
-+   "gitDir": "../",
-    "linters":{
-        "*": "my-task"
-    }
-}
-```
 
 ## Examples
 
@@ -236,3 +253,22 @@ This will run `eslint --fix` and automatically add changes to the commit. Please
   ]
 }
 ```
+
+### Minify the images and add files to commit
+
+```json
+{
+  "*.{png,jpeg,jpg,gif,svg}": [
+    "imagemin-lint-staged",
+    "git add"
+  ]
+}
+```
+
+<details>
+  <summary>More about <code>imagemin-lint-staged</code></summary>
+
+  [imagemin-lint-staged](https://github.com/tomchentw/imagemin-lint-staged) is a CLI tool designed for lint-staged usage with sensible defaults.
+
+  See more on [this blog post](https://medium.com/@tomchentw/imagemin-lint-staged-in-place-minify-the-images-before-adding-to-the-git-repo-5acda0b4c57e) for benefits of this approach.
+</details>

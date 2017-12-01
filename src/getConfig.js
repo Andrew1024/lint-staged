@@ -12,23 +12,23 @@ const logValidationWarning = require('jest-validate').logValidationWarning
 const unknownOptionWarning = require('jest-validate/build/warnings').unknownOptionWarning
 const isGlob = require('is-glob')
 
+const debug = require('debug')('lint-staged:cfg')
+
 /**
  * Default config object
  *
- * @type {{concurrent: boolean, chunkSize: number, gitDir: string, globOptions: {matchBase: boolean, dot: boolean}, linters: {}, subTaskConcurrency: number, renderer: string, verbose: boolean}}
+ * @type {{concurrent: boolean, chunkSize: number, globOptions: {matchBase: boolean, dot: boolean}, linters: {}, subTaskConcurrency: number, renderer: string}}
  */
 const defaultConfig = {
   concurrent: true,
   chunkSize: Number.MAX_SAFE_INTEGER,
-  gitDir: '.',
   globOptions: {
     matchBase: true,
     dot: true
   },
   linters: {},
   subTaskConcurrency: 1,
-  renderer: 'update',
-  verbose: false
+  renderer: 'update'
 }
 
 /**
@@ -59,9 +59,10 @@ function unknownValidationReporter(config, example, option, options) {
    * a typical mistake of mixing simple and advanced configs
    */
   if (isGlob(option)) {
+    // prettier-ignore
     const message = `  Unknown option ${chalk.bold(`"${option}"`)} with value ${chalk.bold(
-      format(config[option], { inlineCharacterLimit: Number.POSITIVE_INFINITY })
-    )} was found in the config root.
+    format(config[option], { inlineCharacterLimit: Number.POSITIVE_INFINITY })
+  )} was found in the config root.
 
   You are probably trying to mix simple and advanced config formats. Adding
 
@@ -72,7 +73,7 @@ function unknownValidationReporter(config, example, option, options) {
   will fix it and remove this message.`
 
     const comment = options.comment
-    const name = (options.title && options.title.warning) || 'WARNING'
+    const name = options.title.warning
     return logValidationWarning(name, message, comment)
   }
   // If it is not glob pattern, use default jest-validate reporter
@@ -88,10 +89,11 @@ function unknownValidationReporter(config, example, option, options) {
  *
  * @param {Object} sourceConfig
  * @returns {{
- *  concurrent: boolean, chunkSize: number, gitDir: string, globOptions: {matchBase: boolean, dot: boolean}, linters: {}, subTaskConcurrency: number, renderer: string, verbose: boolean
+ *  concurrent: boolean, chunkSize: number, globOptions: {matchBase: boolean, dot: boolean}, linters: {}, subTaskConcurrency: number, renderer: string
  * }}
  */
-function getConfig(sourceConfig) {
+function getConfig(sourceConfig, debugMode) {
+  debug('Normalizing config')
   const config = defaultsDeep(
     {}, // Do not mutate sourceConfig!!!
     isSimple(sourceConfig) ? { linters: sourceConfig } : sourceConfig,
@@ -100,11 +102,17 @@ function getConfig(sourceConfig) {
 
   // Check if renderer is set in sourceConfig and if not, set accordingly to verbose
   if (isObject(sourceConfig) && !sourceConfig.hasOwnProperty('renderer')) {
-    config.renderer = config.verbose ? 'verbose' : 'update'
+    config.renderer = debugMode ? 'verbose' : 'update'
   }
 
   return config
 }
+
+const optRmMsg = (opt, helpMsg) => `  Option ${chalk.bold(opt)} was removed.
+
+  ${helpMsg}
+
+  Please remove ${chalk.bold(opt)} from your configuration.`
 
 /**
  * Runs config validation. Throws error if the config is not valid.
@@ -112,6 +120,7 @@ function getConfig(sourceConfig) {
  * @returns config {Object}
  */
 function validateConfig(config) {
+  debug('Validating config')
   const exampleConfig = Object.assign({}, defaultConfig, {
     linters: {
       '*.js': ['eslint --fix', 'git add'],
@@ -119,16 +128,19 @@ function validateConfig(config) {
     }
   })
 
-  const validation = validate(config, {
+  const deprecatedConfig = {
+    gitDir: () => optRmMsg('gitDir', "lint-staged now automatically resolves '.git' directory."),
+    verbose: () =>
+      optRmMsg('verbose', `Use the command line flag ${chalk.bold('--debug')} instead.`)
+  }
+
+  validate(config, {
     exampleConfig,
+    deprecatedConfig,
     unknown: unknownValidationReporter,
     comment:
       'Please refer to https://github.com/okonet/lint-staged#configuration for more information...'
   })
-
-  if (!validation.isValid) {
-    throw new Error('lint-staged config is invalid... Aborting.')
-  }
 
   return config
 }

@@ -3,6 +3,7 @@
 'use strict'
 
 const appRoot = require('app-root-path')
+const dedent = require('dedent')
 const cosmiconfig = require('cosmiconfig')
 const stringifyObject = require('stringify-object')
 const getConfig = require('./getConfig').getConfig
@@ -10,8 +11,9 @@ const validateConfig = require('./getConfig').validateConfig
 const printErrors = require('./printErrors')
 const runAll = require('./runAll')
 
+const debug = require('debug')('lint-staged')
+
 // Find the right package.json at the root of the project
-// TODO: Test if it should be aware of `gitDir`
 const packageJson = require(appRoot.resolve('package.json'))
 
 // Force colors for packages that depend on https://www.npmjs.com/package/supports-color
@@ -25,29 +27,41 @@ const errConfigNotFound = new Error('Config could not be found')
 /**
  * Root lint-staged function that is called from .bin
  */
-module.exports = function lintStaged() {
-  return cosmiconfig('lint-staged', {
+module.exports = function lintStaged(injectedLogger, configPath, debugMode) {
+  debug('Loading config using `cosmiconfig`')
+  const logger = injectedLogger || console
+
+  const explorer = cosmiconfig('lint-staged', {
+    configPath,
     rc: '.lintstagedrc',
     rcExtensions: true
   })
+
+  return explorer
+    .load(process.cwd())
     .then(result => {
       if (result == null) throw errConfigNotFound
 
+      debug('Successfully loaded config from `%s`:\n%O', result.filepath, result.config)
       // result.config is the parsed configuration object
       // result.filepath is the path to the config file that was found
-      const config = validateConfig(getConfig(result.config))
-
-      if (config.verbose) {
-        console.log(`
-Running lint-staged with the following config:
-${stringifyObject(config)}
-`)
+      const config = validateConfig(getConfig(result.config, debugMode))
+      if (debugMode) {
+        // Log using logger to be able to test through `consolemock`.
+        logger.log('Running lint-staged with the following config:')
+        logger.log(stringifyObject(config, { indent: '  ' }))
+      } else {
+        // We might not be in debug mode but `DEBUG=lint-staged*` could have
+        // been set.
+        debug('Normalized config:\n%O', config)
       }
 
       const scripts = packageJson.scripts || {}
+      debug('Loaded scripts from package.json:\n%O', scripts)
 
-      runAll(scripts, config)
+      runAll(scripts, config, debugMode)
         .then(() => {
+          debug('linters were executed successfully!')
           // No errors, exiting with 0
           process.exitCode = 0
         })
@@ -59,18 +73,21 @@ ${stringifyObject(config)}
     })
     .catch(err => {
       if (err === errConfigNotFound) {
-        console.error(`${err.message}.`)
+        logger.error(`${err.message}.`)
       } else {
         // It was probably a parsing error
-        console.error(`Could not parse lint-staged config.
+        logger.error(dedent`
+          Could not parse lint-staged config.
 
-${err}`)
+          ${err}
+        `)
       }
+      logger.error() // empty line
       // Print helpful message for all errors
-      console.error(`
-Please make sure you have created it correctly.
-See https://github.com/okonet/lint-staged#configuration.
-`)
+      logger.error(dedent`
+        Please make sure you have created it correctly.
+        See https://github.com/okonet/lint-staged#configuration.
+      `)
       process.exitCode = 1
     })
 }
